@@ -129,4 +129,204 @@
 
     
 
-12. 啊啊啊
+12. pow函数
+
+    ```
+    float result = pow(x, y);
+    ```
+
+    这段代码可以计算x的y次方。
+
+    注意：pow函数不支持负数的n次方，也不支持一个数的0次方或者负次方。
+
+    > 那么，为什么pow(x, y)函数如此奇怪呢？如果你仔细看这个函数的文档说明，你会发现这个函数会返回一个undefined如果x小于0或者x等于0或者y小于等于0。
+    >
+    > Source: https://copyfuture.com/blogs-details/20211102100119806G
+
+    如果需要做负数的整数次方，可以用下面这段代码（有bug，等下会讲如何修复）：
+
+    ```
+    // Only support integral y values, but support negative x values.
+    float intPow(float x, int y){
+        float result = 1.0f;
+        while(true){
+            result *= x;
+            y -= 1;
+            if(y == 0){
+                break;
+            }
+        }
+        return result;
+    }
+    ```
+
+    上面的代码经常崩溃，一开始以为是GPU算力不够，结果后来发现不是：
+
+    原来，上面代码运算0次方时会崩溃，应该把if条件改成y <= 0，并且加入0次方时结果为1的预检验：
+
+    ```
+    // Only support integral y values, but support negative x values.
+    float intPow(float x, int y){
+        if(y == 0){
+            return 1.0f;
+        }
+        
+        float result = 1.0f;
+        while(true){
+            result *= x;
+            y -= 1;
+            if(y <= 0){
+                break;
+            }
+        }
+        return result;
+    }
+    ```
+
+    这样之后，我们就可以用负一的n次方的运算规律来制作Blinker了：
+
+    ```
+    // Only support integral y values, but support negative x values.
+    float intPow(float x, int y){
+        if(y == 0){
+            return 1.0f;
+        }
+        
+        float result = 1.0f;
+        while(true){
+            result *= x;
+            y -= 1;
+            if(y <= 0){
+                break;
+            }
+        }
+        return result;
+        
+    }
+    
+    void mainImage( out vec4 fragColor, in vec2 fragCoord )
+    {
+        vec2 uv = fragCoord.xy / iResolution.xy;
+        float color;
+        for(int i = 0; i < 1; i++){
+            color = float(intPow(-1.0f, int(fragCoord.x)));
+        }
+        fragColor = vec4(color, color, color, 1.0);
+    }
+    ```
+
+    把MainImage的For循环次数从1修改成1000，会发现明显的性能下降，FPS从75调到12。
+
+    于是我用下面的代码优化负一的n次方运算：
+
+    ```
+    // Only support integral y values, and only support x=-1.
+    int neg1Pow(int y){
+        return y % 2 == 1 ? -1 : 1;
+    }
+    
+    // Only support integral y values, but support negative x values.
+    float intPow(float x, int y){
+        
+        // Power of -1's speed optimization when x ~= -1.
+        if(abs(x + 1.0f) < 0.0005f){
+            return float(neg1Pow(y));
+        }
+        
+        if(y == 0){
+            return 1.0f;
+        }
+        
+        float result = 1.0f;
+        while(true){
+            result *= x;
+            y -= 1;
+            if(y <= 0){
+                break;
+            }
+        }
+        return result;
+        
+    }
+    
+    void mainImage( out vec4 fragColor, in vec2 fragCoord )
+    {
+        vec2 uv = fragCoord.xy / iResolution.xy;
+        float color;
+        for(int i = 0; i < 1000; i++){
+            color = float(intPow(-1.0f, int(fragCoord.x)));
+        }
+        fragColor = vec4(color, color, color, 1.0);
+    }
+    ```
+
+    优化过后，同样的1000次循环，FPS仍然稳定在75。
+
+    接着，我们继续优化，抽象出一个通用的，优化过的pow函数，比自带的pow函数范围更广：
+
+    ```
+    // Only support integral y values, and only support x=-1.
+    int neg1Pow(int y){
+        return y % 2 == 1 ? -1 : 1;
+    }
+    
+    // Only support integral y values, but support negative x values.
+    float intPow(float x, int y){
+        
+        // Power of -1's speed optimization when x ~= -1.
+        if(abs(x + 1.0f) < 0.0005f){
+            return float(neg1Pow(y));
+        }
+        
+        if(y == 0){
+            return 1.0f;
+        }
+        
+        float result = 1.0f;
+        while(true){
+            result *= x;
+            y -= 1;
+            if(y <= 0){
+                break;
+            }
+        }
+        return result;
+    }
+    
+    // Support more cases than pow():
+    // Case 1: x > 0 and y > 0 (the case that pow() supports)
+    // Case 2: x < 0 and y is an integer (the extra case)
+    float universalPow(float x, float y){
+    
+        // Integral y and negative x case speed optimization.
+        if( (abs(y - floor(y + 0.5f)) < 0.0005f) && x < 0.0f){
+            return intPow(x, int(y));
+        }
+        else{
+            return pow(x, y);
+        }
+    }
+    
+    void mainImage( out vec4 fragColor, in vec2 fragCoord )
+    {
+        vec2 uv = fragCoord.xy / iResolution.xy;
+        float color;
+        for(int i = 0; i < 1000; i++){
+            color = float(intPow(-1.0f, int(fragCoord.x)));
+        }
+        fragColor = vec4(color, color, color, 1.0);
+    }
+    ```
+
+    
+
+13. 四舍五入
+
+    ```
+    floor(f+0.5)
+    ```
+
+    
+
+14. 啊啊啊
+
